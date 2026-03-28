@@ -1,5 +1,5 @@
 ﻿using Microsoft.AspNetCore.Mvc;
-using Newtonsoft.Json.Linq;
+using Newtonsoft.Json;
 using Online.Models.Kinogo;
 using Shared.Models.Online.Settings;
 using Shared.PlaywrightCore;
@@ -25,7 +25,7 @@ namespace Online.Controllers
                     return OnError("search params");
 
                 reset_search:
-                var search = await InvokeCacheResult<SearchModel>($"kinogo:search:{title}:{year}", 20, async e =>
+                var search = await InvokeCacheResult<SearchModel>($"kinogo:search:{title}:{year}", TimeSpan.FromHours(4), async e =>
                 {
                     string search = rch?.enable == true
                         ? await rch.Get($"{init.host}/search/{title}")
@@ -60,7 +60,7 @@ namespace Online.Controllers
             #region embed
             reset_embed:
 
-            var cache = await InvokeCacheResult<JArray>(ipkey(href), 20, async e =>
+            var cache = await InvokeCacheResult<List<PlaylistItem>>(ipkey(href), 20, async e =>
             {
                 string embedUrl = null;
                 string targetHref = $"{init.host}/{href}";
@@ -100,7 +100,7 @@ namespace Online.Controllers
 
                 try
                 {
-                    var playlist = JArray.Parse(playlistJson);
+                    var playlist = JsonConvert.DeserializeObject<List<PlaylistItem>>(playlistJson);
                     if (playlist == null || playlist.Count == 0)
                         return e.Fail("playlist");
 
@@ -123,16 +123,16 @@ namespace Online.Controllers
 
 
         #region BuildResult
-        ITplResult BuildResult(JArray playlist, string title, string original_title, int year, int s, int t, bool rjson, string href)
+        ITplResult BuildResult(List<PlaylistItem> playlist, string title, string original_title, int year, int s, int t, bool rjson, string href)
         {
-            if (playlist.First.Value<string>("file") != null)
+            if (!string.IsNullOrEmpty(playlist.FirstOrDefault()?.file))
             {
                 var mtpl = new MovieTpl(title, original_title);
 
                 foreach (var source in playlist)
                 {
-                    string voice = source.Value<string>("title");
-                    string file = source.Value<string>("file");
+                    string voice = source.title;
+                    string file = source.file;
 
                     if (string.IsNullOrEmpty(voice) || string.IsNullOrEmpty(file))
                         continue;
@@ -142,7 +142,7 @@ namespace Online.Controllers
 
                     #region subtitle
                     var subtitles = new SubtitleTpl();
-                    string _subs = source.Value<string>("subtitle");
+                    string _subs = source.subtitle;
                     if (!string.IsNullOrEmpty(_subs))
                     {
                         var match = new Regex("\\[([^\\]]+)\\]([^\\[\\,]+)").Match(_subs);
@@ -175,7 +175,7 @@ namespace Online.Controllers
                     var tpl = new SeasonTpl(playlist.Count);
                     foreach (var season in playlist)
                     {
-                        string _s = Regex.Match(season.Value<string>("title") ?? string.Empty, " ([0-9]+)$").Groups[1].Value;
+                        string _s = Regex.Match(season.title ?? string.Empty, " ([0-9]+)$").Groups[1].Value;
                         if (!string.IsNullOrEmpty(_s))
                         {
                             string link = $"{host}/lite/kinogo?rjson={rjson}&title={enc_title}&original_title={enc_original_title}&year={year}&href={enc_href}&s={_s}";
@@ -187,7 +187,7 @@ namespace Online.Controllers
                 }
                 else
                 {
-                    var episodes = playlist.First(i => i.Value<string>("title").EndsWith($" {s}"))["folder"];
+                    var episodes = playlist.First(i => (i.title ?? string.Empty).EndsWith($" {s}")).folder;
 
                     #region Перевод
                     var vtpl = new VoiceTpl();
@@ -195,9 +195,12 @@ namespace Online.Controllers
 
                     foreach (var episode in episodes)
                     {
-                        foreach (var voice in episode["folder"])
+                        if (episode.folder == null)
+                            continue;
+
+                        foreach (var voice in episode.folder)
                         {
-                            int voice_id = voice.Value<int>("voice_id");
+                            int voice_id = voice.voice_id;
                             if (!hashSet.Add(voice_id))
                                 continue;
 
@@ -207,17 +210,17 @@ namespace Online.Controllers
                             string link = $"{host}/lite/kinogo?rjson={rjson}&title={enc_title}&original_title={enc_original_title}&year={year}&href={enc_href}&s={s}&t={voice_id}";
                             bool active = t == voice_id;
 
-                            vtpl.Append(voice.Value<string>("title"), active, link);
+                            vtpl.Append(voice.title, active, link);
                         }
                     }
                     #endregion
 
-                    var etpl = new EpisodeTpl(vtpl, episodes.Count());
+                    var etpl = new EpisodeTpl(vtpl, episodes.Count);
 
                     foreach (var episode in episodes)
                     {
-                        string name = episode.Value<string>("title");
-                        string file = episode["folder"].FirstOrDefault(i => i.Value<int>("voice_id") == t)?.Value<string>("file");
+                        string name = episode.title;
+                        string file = episode.folder?.FirstOrDefault(i => i.voice_id == t)?.file;
 
                         if (string.IsNullOrEmpty(file))
                             continue;
@@ -225,9 +228,9 @@ namespace Online.Controllers
                         if (file.StartsWith("//"))
                             file = "https:" + file;
 
-                        #region subtitle
-                        var subtitles = new SubtitleTpl();
-                        string _subs = episode.Value<string>("subtitle");
+                    #region subtitle
+                    var subtitles = new SubtitleTpl();
+                        string _subs = episode.subtitle;
 
                         if (!string.IsNullOrEmpty(_subs))
                         {

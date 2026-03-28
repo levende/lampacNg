@@ -43,7 +43,7 @@ namespace Online.Controllers
         }
 
         [HttpGet]
-        [Staticache(1)]
+        [Staticache]
         [Route("lite/collaps")]
         [Route("lite/collaps-dash")]
         async public Task<ActionResult> Index(long orid, string imdb_id, long kinopoisk_id, string title, string original_title, int s = -1, bool rjson = false, bool similar = false)

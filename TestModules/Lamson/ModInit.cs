@@ -13,14 +13,13 @@ namespace Lamson
     public class ModInit : IModuleLoaded
     {
         public static OnlinesSettings KinoGram;
-
         public static SisiSettings PornGram;
 
 
         public void Loaded(InitspaceModel conf)
         {
-            KinoGram = ModuleInvoke.Init("KinoGram", new OnlinesSettings("KinoGram", "kinogram.com", streamproxy: true));
-            PornGram = ModuleInvoke.Init("PornGram", new SisiSettings("PornGram", "porngram.com"));
+			KinoGram = ModuleInvoke.Init("KinoGram", new OnlinesSettings("KinoGram", "kinogram.com", streamproxy: true));
+			PornGram = ModuleInvoke.Init("PornGram", new SisiSettings("PornGram", "porngram.com"));
 
             ThreadPool.QueueUserWorkItem(async _ =>
             {
@@ -41,10 +40,9 @@ namespace Lamson
                 await Task.Delay(1000);
             };
 
-            EventListener.Middleware += (first, e) => Task.FromResult(Middlewares.Invoke(first, e.httpContext, e.memoryCache));
-            EventListener.Middleware += async (first, e) => await Middlewares.InvokeAsync(first, e.httpContext, e.memoryCache);
+            EventListener.Middleware += (first, e) => Task.FromResult(Middlewares.Invoke(first, e.httpContext));
+            EventListener.Middleware += async (first, e) => await Middlewares.InvokeAsync(first, e.httpContext);
         }
-
 
         public void Dispose()
         {

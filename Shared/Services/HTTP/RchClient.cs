@@ -65,7 +65,11 @@ namespace Shared.Services
             clients.AddOrUpdate(connectionId, new clientEntry(ip, host, info, connection), (i, j) => new clientEntry(ip, host, info, connection));
 
             if (EventListener.RchRegistry != null)
-                EventListener.RchRegistry.Invoke(new EventRchRegistry(connectionId, ip, host, info, connection));
+            {
+                var em = new EventRchRegistry(connectionId, ip, host, info, connection);
+                foreach (Action<EventRchRegistry> handler in EventListener.RchRegistry.GetInvocationList())
+                    handler(em);
+            }
         }
 
 
@@ -74,7 +78,11 @@ namespace Shared.Services
             if (clients.TryRemove(connectionId, out _))
             {
                 if (EventListener.RchDisconnected != null)
-                    EventListener.RchDisconnected.Invoke(new EventRchDisconnected(connectionId));
+                {
+                    var em = new EventRchDisconnected(connectionId);
+                    foreach (Action<EventRchDisconnected> handler in EventListener.RchDisconnected.GetInvocationList())
+                        handler(em);
+                }
             }
         }
         #endregion
@@ -144,7 +152,7 @@ namespace Shared.Services
         #region Eval
         public void EvalRun(string data)
         {
-            _ = SendHub("evalrun", data).ConfigureAwait(false);
+            _= SendHub("evalrun", data).ConfigureAwait(false);
         }
 
         public Task<string> Eval(string data)
@@ -521,7 +529,7 @@ namespace Shared.Services
             }
 
             if (CoreInit.conf.rch.requiredConnected                       // Обязательное подключение
-                || (init.rchstreamproxy != null && !init.streamproxy))   // Нужно знать rchtype устройства 
+                || (init.rchstreamproxy != null && !init.streamproxy))   // Нужно знать rchtype устройства
                 return SocketClient().connectionId == null;
 
             return false;
@@ -565,8 +573,7 @@ namespace Shared.Services
             // разрешен возврат на сервер
             if (rhub_fallback)
             {
-                if (rch_deny.Contains(info.rchtype))
-                {
+                if (rch_deny.Contains(info.rchtype)) {
                     enableRhub = false;
                     init.rhub = false;
                 }

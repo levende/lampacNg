@@ -29,6 +29,12 @@ namespace DLNA
             TrackersCron.Start();
         }
 
+        public void Dispose()
+        {
+            EventListener.UpdateInitFile -= updateConf;
+            TrackersCron.Stop();
+        }
+
         void updateConf()
         {
             conf = ModuleInvoke.Init("DLNA", new ModuleConf()
@@ -44,12 +50,6 @@ namespace DLNA
                     new("^/dlna/", new WafLimitMap { limit = 50, second = 1 })
                 }
             });
-        }
-
-        public void Dispose()
-        {
-            EventListener.UpdateInitFile -= updateConf;
-            TrackersCron.Stop();
         }
     }
 }

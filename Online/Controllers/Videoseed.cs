@@ -1,6 +1,6 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Playwright;
-using Newtonsoft.Json.Linq;
+using Online.Models.Videoseed;
 using Shared.Attributes;
 using Shared.PlaywrightCore;
 
@@ -11,7 +11,7 @@ namespace Online.Controllers
         public Videoseed() : base(ModInit.siteConf.Videoseed) { }
 
         [HttpGet]
-        [Staticache(1)]
+        [Staticache]
         [Route("lite/videoseed")]
         async public Task<ActionResult> Index(string imdb_id, long kinopoisk_id, string title, string original_title, int year, int s = -1, bool rjson = false, int serial = -1)
         {
@@ -24,21 +24,22 @@ namespace Online.Controllers
             if (string.IsNullOrEmpty(init.token))
                 return OnError();
 
-            var cache = await InvokeCacheResult<(Dictionary<string, JObject> seasons, string iframe)>($"videoseed:view:{kinopoisk_id}:{imdb_id}:{original_title}", 40, async e =>
+            var cache = await InvokeCacheResult<(Dictionary<string, Season> seasons, string iframe)>($"videoseed:view:{kinopoisk_id}:{imdb_id}:{original_title}", TimeSpan.FromHours(4), async e =>
             {
-                var data = await goSearch(serial, kinopoisk_id > 0, $"&kp={kinopoisk_id}")
-                    ?? await goSearch(serial, !string.IsNullOrEmpty(imdb_id), $"&tmdb={imdb_id}")
-                    ?? await goSearch(serial, !string.IsNullOrEmpty(original_title), $"&q={HttpUtility.UrlEncode(original_title)}&release_year_from={year - 1}&release_year_to={year + 1}");
+                var data =
+                    await goSearch(serial, kinopoisk_id > 0, $"&kp={kinopoisk_id}") ??
+                    await goSearch(serial, !string.IsNullOrEmpty(imdb_id), $"&tmdb={imdb_id}") ??
+                    await goSearch(serial, !string.IsNullOrEmpty(original_title), $"&q={HttpUtility.UrlEncode(original_title)}&release_year_from={year - 1}&release_year_to={year + 1}");
 
                 if (data == null)
                     return e.Fail("search_data", refresh_proxy: true);
 
-                (Dictionary<string, JObject> seasons, string iframe) result = (null, null);
+                (Dictionary<string, Season> seasons, string iframe) result = (null, null);
 
                 if (serial == 1)
-                    result.seasons = data?["seasons"]?.ToObject<Dictionary<string, JObject>>();
+                    result.seasons = data?.seasons;
                 else
-                    result.iframe = data?.Value<string>("iframe");
+                    result.iframe = data?.iframe;
 
                 if (result.seasons == null && string.IsNullOrEmpty(result.iframe))
                     return e.Fail("empty_embed", refresh_proxy: true);
@@ -78,14 +79,14 @@ namespace Online.Controllers
                     else
                     {
                         string sArhc = s.ToString();
-                        var videos = cache.Value.seasons.First(i => i.Key == sArhc).Value["videos"].ToObject<Dictionary<string, JObject>>();
+                        var videos = cache.Value.seasons.First(i => i.Key == sArhc).Value.videos;
 
                         var etpl = new EpisodeTpl(videos.Count);
 
                         foreach (var video in videos)
                         {
-                            string iframe = video.Value.Value<string>("iframe");
-                            etpl.Append($"{video.Key} серия", title ?? original_title, sArhc, video.Key, accsArgs($"{host}/lite/videoseed/video/{AesTo.Encrypt(iframe)}"), "call", vast: init.vast);
+                            string iframe = video.Value.iframe;
+                            etpl.Append($"{video.Key} серия", title ?? original_title, sArhc, video.Key, accsArgs($"{host}/lite/videoseed/video/{AesTo.Encrypt(iframe)}") + "#.m3u8", "call", vast: init.vast);
                         }
 
                         return etpl;
@@ -209,20 +210,20 @@ namespace Online.Controllers
         #endregion
 
         #region goSearch
-        async Task<JToken> goSearch(int serial, bool isOk, string arg)
+        async Task<Data> goSearch(int serial, bool isOk, string arg)
         {
             if (!isOk)
                 return null;
 
-            var root = await httpHydra.Get<JObject>($"{init.host}/apiv2.php?item={(serial == 1 ? "serial" : "movie")}&token={init.token}" + arg, safety: true);
+            var root = await httpHydra.Get<Root>($"{init.host}/apiv2.php?item={(serial == 1 ? "serial" : "movie")}&token={init.token}" + arg, safety: true);
 
-            if (root == null || !root.ContainsKey("data") || root.Value<string>("status") == "error")
+            if (root?.data == null || root.status == "error")
             {
                 proxyManager?.Refresh();
                 return null;
             }
 
-            return root["data"]?.First;
+            return root.data.FirstOrDefault();
         }
         #endregion
     }

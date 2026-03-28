@@ -20,7 +20,7 @@ namespace Online.Controllers
         }
 
         [HttpGet]
-        [Staticache(1)]
+        [Staticache]
         [Route("lite/kinotochka")]
         async public Task<ActionResult> Index(long kinopoisk_id, string title, string original_title, int serial, string newsuri, int s = -1)
         {
@@ -37,10 +37,10 @@ namespace Online.Controllers
             {
                 if (s == -1)
                 {
-                #region Сезоны
-                rhubFallback:
+                    #region Сезоны
+                    rhubFallback:
 
-                    var cache = await InvokeCacheResult<List<Season>>($"kinotochka:seasons:{title}", 30, textJson: true, onget: async e =>
+                    var cache = await InvokeCacheResult<List<Season>>($"kinotochka:seasons:{title}", TimeSpan.FromHours(4), textJson: true, onget: async e =>
                     {
                         List<Season> links = null;
 
@@ -128,8 +128,8 @@ namespace Online.Controllers
                 }
                 else
                 {
-                #region Серии
-                rhubFallback:
+                    #region Серии
+                    rhubFallback:
 
                     var cache = await InvokeCacheResult<List<Episode>>($"kinotochka:playlist:{newsuri}", 30, textJson: true, onget: async e =>
                     {

@@ -1,5 +1,4 @@
 ﻿using Microsoft.AspNetCore.Mvc;
-using Newtonsoft.Json.Linq;
 using Online.Models.RutubeMovie;
 using System.Net.Http;
 
@@ -31,7 +30,8 @@ namespace Online.Controllers
 
             rhubFallback:
             string memKey = $"rutubemovie:view:{searchTitle}:{year}:{(rch?.enable == true ? requestInfo.Country : "")}";
-            var cache = await InvokeCacheResult<List<Result>>(memKey, 40, textJson: true, onget: async e =>
+
+            var cache = await InvokeCacheResult<List<Result>>(memKey, TimeSpan.FromHours(4), textJson: true, onget: async e =>
             {
                 string uri = $"api/search/video/?content_type=video&duration=movie&query={HttpUtility.UrlEncode($"{title} {year}")}";
 
@@ -93,12 +93,12 @@ namespace Online.Controllers
             rhubFallback:
             var cache = await InvokeCacheResult<string>($"rutubemovie:play:{linkid}", 20, async e =>
             {
-                var root = await httpHydra.Get<JObject>($"{init.host}/api/play/options/{linkid}/?no_404=true&referer=&pver=v2&client=wdp");
+                var root = await httpHydra.Get<RootPlayOptions>($"{init.host}/api/play/options/{linkid}/?no_404=true&referer=&pver=v2&client=wdp");
 
-                if (root == null || !root.ContainsKey("video_balancer"))
+                if (string.IsNullOrEmpty(root?.video_balancer?.m3u8))
                     return e.Fail("video_balancer", refresh_proxy: true);
 
-                return e.Success(root["video_balancer"].Value<string>("m3u8"));
+                return e.Success(root.video_balancer.m3u8);
             });
 
             if (IsRhubFallback(cache))

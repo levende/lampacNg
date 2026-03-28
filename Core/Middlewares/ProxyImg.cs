@@ -67,8 +67,7 @@ namespace Core.Middlewares
         async public Task InvokeAsync(HttpContext httpContext)
         {
             var init = CoreInit.conf.serverproxy.image;
-            if (!init.enable)
-            {
+            if (!init.enable) {
                 httpContext.Response.StatusCode = 404;
                 return;
             }
@@ -141,9 +140,17 @@ namespace Core.Middlewares
 
                         if (EventListener.ProxyImgMd5key != null)
                         {
-                            string newKey = EventListener.ProxyImgMd5key.Invoke(new EventProxyImgMd5key(httpContext, requestInfo, decryptLink, href, width, height));
-                            if (!string.IsNullOrEmpty(newKey))
-                                md5key = CrypTo.md5(newKey);
+                            var em = new EventProxyImgMd5key(httpContext, requestInfo, decryptLink, href, width, height);
+
+                            foreach (Func<EventProxyImgMd5key, string> handler in EventListener.ProxyImgMd5key.GetInvocationList())
+                            {
+                                string newKey = handler(em);
+                                if (newKey != null)
+                                {
+                                    md5key = CrypTo.md5(newKey);
+                                    break;
+                                }
+                            }
                         }
 
                         outFile = fileWatcher.OutFile(md5key);
@@ -243,8 +250,8 @@ namespace Core.Middlewares
 
                         if (width == 0 && height == 0)
                         {
-                        #region bypass
-                        bypass_reset:
+                            #region bypass
+                            bypass_reset:
 
                             var client = FriendlyHttp.MessageClient("proxyimg", Http.Handler(href, proxy));
 
@@ -368,7 +375,7 @@ namespace Core.Middlewares
                             #region rsize
                             httpContext.Response.ContentType = contentType;
 
-                        rsize_reset:
+                            rsize_reset:
 
                             using (var inArray = PoolInvk.msm.GetStream())
                             {
@@ -671,7 +678,7 @@ namespace Core.Middlewares
                 shm = Directory.Exists("/dev/shm");
 
             if (shm == true)
-                return $"/dev/shm/{CrypTo.md5(DateTime.Now.ToFileTimeUtc().ToString())}";
+                return $"/dev/shm/{CrypTo.md5(DateTimeOffset.Now.ToUnixTimeMilliseconds().ToString())}";
 
             return Path.GetTempFileName();
         }

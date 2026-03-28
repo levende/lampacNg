@@ -22,7 +22,7 @@ namespace Online.Controllers
 
             if (string.IsNullOrEmpty(href) && !string.IsNullOrEmpty(source) && !string.IsNullOrEmpty(id))
             {
-                if (source.ToLower() == "kinobase")
+                if (source.Equals("kinobase", StringComparison.OrdinalIgnoreCase))
                     href = id;
             }
 
@@ -43,7 +43,7 @@ namespace Online.Controllers
             #region search
             if (string.IsNullOrEmpty(href))
             {
-                var search = await InvokeCacheResult<SearchModel>($"kinobase:search:{title}:{year}", 40, async e =>
+                var search = await InvokeCacheResult<SearchModel>($"kinobase:search:{title}:{year}", TimeSpan.FromHours(4), async e =>
                 {
                     var content = await oninvk.Search(title, year);
                     if (content == null)

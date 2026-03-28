@@ -25,8 +25,6 @@ namespace Shared
 
         public static bool Win32NT => Environment.OSVersion.Platform == PlatformID.Win32NT;
 
-        public static List<(string path, int minute)> FileCacheCron = new List<(string path, int minute)>();
-
         public static HashSet<string> BaseModPathWhiteList = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
         public static HashSet<string> BaseModValidQueryValueWhiteList = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -67,7 +65,11 @@ namespace Shared
                                 CurrentConf = JObject.FromObject(conf);
                                 lastUpdateConf = lwtConf > lwtYaml ? lwtConf : lwtYaml;
 
-                                EventListener.UpdateInitFile?.Invoke();
+                                if (EventListener.UpdateInitFile != null)
+                                {
+                                    foreach (Action handler in EventListener.UpdateInitFile.GetInvocationList())
+                                        handler();
+                                }
 
                                 string init = JsonConvert.SerializeObject(CurrentConf, Formatting.Indented, new JsonSerializerSettings()
                                 {
@@ -219,7 +221,7 @@ namespace Shared
 
         public string omdbapi_key;
 
-        public string corsehost { get; set; } = "https://cors.lampac.workers.dev";
+        public string corsehost { get; set; } = "";
 
         public BaseModule BaseModule { get; set; } = new BaseModule()
         {
@@ -239,7 +241,7 @@ namespace Shared
 
         public PoolConf pool { get; set; } = new PoolConf()
         {
-            BufferValidityMinutes = 60,
+            BufferValidityMinutes = 180,
             BufferMax = 500_000000, // 500mb
             BufferByteSmallMaxCount = 100,
             BufferByteLargeMaxCount = 100,
@@ -260,15 +262,12 @@ namespace Shared
         public CubConf cub { get; set; } = new CubConf()
         {
             api_key = "4ef0d7355d9ffb5151e987764708ce96",
-            scheme = "https",
-            domain = "cub.red",
-            mirror = "cub.red"
+            scheme = "https", domain = "cub.red", mirror = "cub.red"
         };
 
         public PosterApiConf posterApi = new PosterApiConf()
         {
-            rsize = true,
-            width = 210,
+            rsize = true, width = 210,
             bypass = "statichdrezka\\."
         };
 
@@ -277,7 +276,7 @@ namespace Shared
             minVersion = 1,
             send_pong = true,
             inactiveAfterMinutes = 120,
-            MaximumReceiveMessageSize = 1024 * 1024, // 1Mb
+            MaximumReceiveMessageSize = 1024*1024, // 1Mb
             rch = true
         };
 
@@ -343,16 +342,14 @@ namespace Shared
 
         public PuppeteerConf chromium = new PuppeteerConf()
         {
-            enable = true,
-            Headless = true,
+            enable = true, Headless = true,
             Args = ["--disable-blink-features=AutomationControlled"], // , "--window-position=-2000,100"
             context = new KeepopenContext() { keepopen = true, keepalive = 20, min = 0, max = 4 }
         };
 
         public PuppeteerConf firefox = new PuppeteerConf()
         {
-            enable = false,
-            Headless = true,
+            enable = false, Headless = true,
             context = new KeepopenContext() { keepopen = true, keepalive = 20, min = 1, max = 2 }
         };
 
@@ -372,10 +369,10 @@ namespace Shared
                 NetVipsCache = true,
                 cache = true,
                 cache_rsize = true,
-                cache_time = 60 * 24 // 24h
+                cache_time = 60*24 // 24h
             },
             maxlength_m3u = 10_000000, // 10mb
-            maxlength_ts = 70_000000  // 70mb
+            maxlength_ts =  70_000000  // 70mb
         };
 
         public OnlineConf online = new OnlineConf()
@@ -399,11 +396,8 @@ namespace Shared
             denyMesage = "Добавьте {account_email} в init.conf",
             denyGroupMesage = "У вас нет прав для просмотра этой страницы",
             expiresMesage = "Время доступа для {account_email} истекло в {expires}",
-            maxip_hour = 10,
-            maxrequest_hour = 400,
-            maxlock_day = 3,
-            blocked_hour = 36,
-            shared_daytime = 366 * 10, // 10 years
+            maxip_hour = 10, maxrequest_hour = 400, maxlock_day = 3, blocked_hour = 36,
+            shared_daytime = 366*10, // 10 years
         };
 
         public VastConf vast = new VastConf();
@@ -430,7 +424,7 @@ namespace Shared
             //}
         };
 
-        public IReadOnlyCollection<OverrideResponse> overrideResponse { get; set; }
+        public List<OverrideResponse> overrideResponse { get; set; }
         //{
         //    new OverrideResponse()
         //    {

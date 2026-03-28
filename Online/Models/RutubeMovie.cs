@@ -28,4 +28,14 @@ namespace Online.Models.RutubeMovie
     {
         public int id { get; set; }
     }
+
+    public class RootPlayOptions
+    {
+        public VideoBalancer video_balancer { get; set; }
+    }
+
+    public class VideoBalancer
+    {
+        public string m3u8 { get; set; }
+    }
 }

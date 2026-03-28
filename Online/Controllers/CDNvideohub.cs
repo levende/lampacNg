@@ -1,5 +1,5 @@
 ﻿using Microsoft.AspNetCore.Mvc;
-using Newtonsoft.Json.Linq;
+using Online.Models.CDNvideohub;
 using Shared.Attributes;
 using Shared.Services.RxEnumerate;
 using System.Net.Http;
@@ -20,7 +20,7 @@ namespace Online.Controllers
         }
 
         [HttpGet]
-        [Staticache(1)]
+        [Staticache]
         [Route("lite/cdnvideohub")]
         async public Task<ActionResult> Index(string title, string original_title, long kinopoisk_id, string t, int s = -1, bool rjson = false)
         {
@@ -28,15 +28,14 @@ namespace Online.Controllers
                 return badInitMsg;
 
             rhubFallback:
-            var cache = await InvokeCacheResult<JObject>($"cdnvideohub:view:{kinopoisk_id}", 30, async e =>
+            var cache = await InvokeCacheResult<RootObject>($"cdnvideohub:view:{kinopoisk_id}", TimeSpan.FromHours(4), async e =>
             {
-                var root = await httpHydra.Get<JObject>($"{init.host}/api/v1/player/sv/playlist?pub=12&aggr=kp&id={kinopoisk_id}");
+                var root = await httpHydra.Get<RootObject>($"{init.host}/api/v1/player/sv/playlist?pub=12&aggr=kp&id={kinopoisk_id}");
 
-                if (root == null || !root.ContainsKey("items"))
+                if (root?.items == null)
                     return e.Fail("root", refresh_proxy: true);
 
-                var videos = root["items"] as JArray;
-                if (videos == null || videos.Count == 0)
+                if (root.items.Length == 0)
                     return e.Fail("video");
 
                 return e.Success(root);
@@ -47,7 +46,7 @@ namespace Online.Controllers
 
             return ContentTpl(cache, () =>
             {
-                if (cache.Value.Value<bool>("isSerial"))
+                if (cache.Value.isSerial)
                 {
                     #region Сериал
                     string defaultargs = $"&rjson={rjson}&kinopoisk_id={kinopoisk_id}&title={HttpUtility.UrlEncode(title)}&original_title={HttpUtility.UrlEncode(original_title)}";
@@ -58,9 +57,9 @@ namespace Online.Controllers
                         var tpl = new SeasonTpl();
                         var hash = new HashSet<int>();
 
-                        foreach (var video in cache.Value["items"].OrderBy(i => i.Value<int>("season")))
+                        foreach (var video in cache.Value.items.OrderBy(i => i.season))
                         {
-                            int season = video.Value<int>("season");
+                            int season = video.season;
 
                             if (hash.Contains(season))
                                 continue;
@@ -78,12 +77,12 @@ namespace Online.Controllers
                         var vtpl = new VoiceTpl();
                         var tmpVoice = new HashSet<string>();
 
-                        foreach (var video in cache.Value["items"])
+                        foreach (var video in cache.Value.items)
                         {
-                            if (video.Value<int>("season") != s)
+                            if (video.season != s)
                                 continue;
 
-                            string voice_studio = video.Value<string>("voiceStudio");
+                            string voice_studio = video.voiceStudio;
                             if (string.IsNullOrEmpty(voice_studio) || tmpVoice.Contains(voice_studio))
                                 continue;
 
@@ -99,16 +98,16 @@ namespace Online.Controllers
                         var etpl = new EpisodeTpl(vtpl);
                         var tmpEpisode = new HashSet<int>();
 
-                        foreach (var video in cache.Value["items"].OrderBy(i => i.Value<int>("episode")))
+                        foreach (var video in cache.Value.items.OrderBy(i => i.episode))
                         {
-                            if (video.Value<int>("season") != s || video.Value<string>("voiceStudio") != t)
+                            if (video.season != s || video.voiceStudio != t)
                                 continue;
 
-                            string vkId = video.Value<string>("vkId");
+                            string vkId = video.vkId;
                             if (string.IsNullOrEmpty(vkId))
                                 continue;
 
-                            int episode = video.Value<int>("episode");
+                            int episode = video.episode;
 
                             if (tmpEpisode.Contains(episode))
                                 continue;
@@ -129,10 +128,10 @@ namespace Online.Controllers
                     #region Фильм
                     var mtpl = new MovieTpl(title, original_title);
 
-                    foreach (var video in cache.Value["items"])
+                    foreach (var video in cache.Value.items)
                     {
-                        string voice = video.Value<string>("voiceStudio") ?? video.Value<string>("voiceType");
-                        string vkId = video.Value<string>("vkId");
+                        string voice = video.voiceStudio ?? video.voiceType;
+                        string vkId = video.vkId;
 
                         string link = accsArgs($"{host}/lite/cdnvideohub/video.m3u8?vkId={vkId}&title={HttpUtility.UrlEncode(title)}");
 
@@ -171,7 +170,7 @@ namespace Online.Controllers
                     return ShowError(rch_error);
             }
 
-        rhubFallback:
+            rhubFallback:
 
             var cache = await InvokeCacheResult<string>(ipkey($"cdnvideohub:video:{vkId}"), 20, async e =>
             {

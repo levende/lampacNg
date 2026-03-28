@@ -1,7 +1,7 @@
 ﻿using Microsoft.AspNetCore.Mvc;
-using Newtonsoft.Json.Linq;
 using Online.Models.VeoVeo;
 using Shared.Attributes;
+using Shared.Services.RxEnumerate;
 using System.Net.Http;
 
 namespace Online.Controllers
@@ -11,36 +11,43 @@ namespace Online.Controllers
         public static List<Movie> database;
         static readonly HttpClient http2Client = FriendlyHttp.CreateHttp2Client();
 
-        public VeoVeo() : base(ModInit.siteConf.VeoVeo) { }
+        public VeoVeo() : base(ModInit.siteConf.VeoVeo) 
+        {
+            requestInitialization += () =>
+            {
+                if (init.httpversion == 2)
+                    httpHydra.RegisterHttp(http2Client);
+            };
+        }
 
         [HttpGet]
-        [Staticache(1)]
+        [Staticache]
         [Route("lite/veoveo")]
         async public Task<ActionResult> Index(long movieid, string imdb_id, long kinopoisk_id, string title, string original_title, int clarification, int s = -1, bool rjson = false, bool similar = false)
         {
             if (await IsRequestBlocked(rch: true, rch_check: !similar))
                 return badInitMsg;
 
+            #region search
             if (movieid == 0)
             {
                 if (similar)
                     return await Spider(title);
 
-                var movie = search(imdb_id, kinopoisk_id, title, original_title);
+                var movie = await search(imdb_id, kinopoisk_id, title, original_title);
                 if (movie == null)
                     return await Spider(clarification == 1 ? title : (original_title ?? title));
 
                 movieid = movie.id;
             }
+            #endregion
 
-        #region media
-        rhubFallback:
-            var cache = await InvokeCacheResult<JArray>($"{init.plugin}:view:{movieid}", 20, async e =>
+            #region media
+            rhubFallback:
+
+            var cache = await InvokeCacheResult<List<CatalogItem>>($"{init.plugin}:view:{movieid}", 20, async e =>
             {
-                if (init.httpversion == 2)
-                    httpHydra.RegisterHttp(http2Client);
-
-                var root = await httpHydra.Get<JArray>($"{init.host}/balancer-api/proxy/playlists/catalog-api/episodes?content-id={movieid}");
+                var root = await httpHydra.Get<List<CatalogItem>>($"{init.host}/balancer-api/proxy/playlists/catalog-api/episodes?content-id={movieid}");
 
                 if (root == null || root.Count == 0)
                     return e.Fail("data");
@@ -54,27 +61,28 @@ namespace Online.Controllers
 
             return ContentTpl(cache, () =>
             {
-                if (cache.Value.First["season"].Value<int>("order") == 0)
+                var firstCatalogItem = cache.Value.First();
+
+                if (firstCatalogItem.season?.order == 0)
                 {
                     #region Фильм
                     var mtpl = new MovieTpl(title, original_title, 1);
 
-                    var first = cache.Value?.FirstOrDefault();
-                    if (first != null)
+                    if (firstCatalogItem != null)
                     {
-                        var episodes = first["episodeVariants"];
+                        var episodes = firstCatalogItem.episodeVariants;
                         if (episodes != null)
                         {
                             foreach (var episode in episodes)
                             {
-                                string file = episode?.Value<string>("filepath");
+                                string file = episode?.filepath;
                                 if (!string.IsNullOrWhiteSpace(file))
                                 {
                                     string stream = file.Contains(".json")
                                         ? accsArgs($"{host}/lite/veoveo/parsed.m3u8?link={EncryptQuery(file)}")
                                         : HostStreamProxy(file);
 
-                                    mtpl.Append(episode.Value<string>("title") ?? "1080p", stream, vast: init.vast);
+                                    mtpl.Append(episode.title ?? "1080p", stream, vast: init.vast);
                                 }
                             }
                         }
@@ -93,7 +101,7 @@ namespace Online.Controllers
 
                         foreach (var item in cache.Value)
                         {
-                            var season = item["season"].Value<int>("order");
+                            var season = item.season?.order ?? 0;
                             if (hash.Contains(season))
                                 continue;
 
@@ -106,31 +114,31 @@ namespace Online.Controllers
                     }
                     else
                     {
-                        var episodes = cache.Value.Where(i => i["season"].Value<int>("order") == s);
+                        var episodes = cache.Value.Where(i => (i.season?.order ?? 0) == s);
 
                         var etpl = new EpisodeTpl(episodes.Count());
                         string sArhc = s.ToString();
 
-                        foreach (var episode in episodes.OrderBy(i => i.Value<int>("order")))
+                        foreach (var episode in episodes.OrderBy(i => i.order))
                         {
-                            string name = episode.Value<string>("title");
+                            string name = episode.title;
 
                             var first = cache.Value?.FirstOrDefault();
                             if (first != null)
                             {
-                                var variants = first["episodeVariants"];
+                                var variants = first.episodeVariants;
                                 var fileToken = variants?
-                                    .OrderByDescending(i => (i.Value<string>("filepath") ?? "").Contains(".m3u8"))
+                                    .OrderByDescending(i => (i.filepath ?? "").Contains(".m3u8"))
                                     .FirstOrDefault();
 
-                                string file = fileToken?.Value<string>("filepath");
+                                string file = fileToken?.filepath;
                                 if (!string.IsNullOrWhiteSpace(file))
                                 {
                                     string stream = HostStreamProxy(file);
                                     if (stream.Contains(".json"))
                                         stream = accsArgs($"{host}/lite/veoveo/parsed.m3u8?link={EncryptQuery(file)}");
 
-                                    etpl.Append(name ?? $"{episode.Value<int>("order")} серия", title ?? original_title, sArhc, episode.Value<int>("order").ToString(), stream, vast: init.vast);
+                                    etpl.Append(name ?? $"{episode.order} серия", title ?? original_title, sArhc, episode.order.ToString(), stream, vast: init.vast);
                                 }
                             }
                         }
@@ -153,16 +161,12 @@ namespace Online.Controllers
 
             string m3u8 = await InvokeCache($"veoveo:parsed:{link}", 20, async () =>
             {
-                var parsed = await httpHydra.Get<JObject>(link);
-                if (parsed != null && parsed.ContainsKey("sources"))
+                var parsed = await httpHydra.Get<ParsedResponse>(link);
+                if (parsed?.sources != null && parsed.sources.Count > 0)
                 {
-                    var sources = parsed["sources"] as JArray;
-                    if (sources != null && sources.Count > 0)
-                    {
-                        string m3u8 = sources.First.Value<string>("link");
-                        if (!string.IsNullOrEmpty(m3u8))
-                            return m3u8;
-                    }
+                    string m3u8 = parsed.sources.FirstOrDefault()?.link;
+                    if (!string.IsNullOrEmpty(m3u8))
+                        return m3u8;
                 }
 
                 return null;
@@ -193,7 +197,8 @@ namespace Online.Controllers
                 if (stpl.data.Count >= 100)
                     break;
 
-                if (StringConvert.SearchName(m.title, string.Empty).Contains(_t) || StringConvert.SearchName(m.originalTitle, string.Empty).Contains(_t))
+                if (StringConvert.SearchName(m.title, string.Empty).Contains(_t) ||
+                    StringConvert.SearchName(m.originalTitle, string.Empty).Contains(_t))
                 {
                     string uri = $"{host}/lite/veoveo?movieid={m.id}";
                     stpl.Append(m.title ?? m.originalTitle, m.year.ToString(), string.Empty, uri, PosterApi.Find(m.kinopoiskId, m.imdbId));
@@ -206,8 +211,15 @@ namespace Online.Controllers
 
 
         #region search
-        Movie search(string imdb_id, long kinopoisk_id, string title, string original_title)
+        async ValueTask<Movie> search(string imdb_id, long kinopoisk_id, string title, string original_title)
         {
+            if (!string.IsNullOrEmpty(init.token) && (!string.IsNullOrEmpty(imdb_id) || kinopoisk_id > 0))
+            {
+                var result = await searchApi(imdb_id, kinopoisk_id);
+                if (result != null)
+                    return result;
+            }
+
             string stitle = StringConvert.SearchName(title);
             string sorigtitle = StringConvert.SearchName(original_title);
 
@@ -252,6 +264,38 @@ namespace Online.Controllers
             }
 
             return goSearch(true) ?? goSearch(false);
+        }
+        #endregion
+
+        #region searchApi
+        ValueTask<Movie> searchApi(string imdb_id, long kinopoisk_id)
+        {
+            return InvokeCache($"veoveo:searchApi:{imdb_id}:{kinopoisk_id}", TimeSpan.FromHours(4), async () =>
+            {
+                async Task<Movie> MOVIE_ID(string url)
+                {
+                    string MOVIE_ID = null;
+                    await httpHydra.GetSpan(url, html =>
+                    {
+                        MOVIE_ID = Rx.Match(html, "window.MOVIE_ID=([0-9]+);");
+                    });
+
+                    if (MOVIE_ID != null && int.TryParse(MOVIE_ID, out int _id) && _id > 0)
+                        return new Movie() { id = _id };
+
+                    return null;
+                }
+
+                Movie movie = null;
+
+                if (kinopoisk_id > 0)
+                    movie = await MOVIE_ID($"{init.host}/balancer-api/iframe?kp={kinopoisk_id}&token={init.token}");
+
+                if (!string.IsNullOrEmpty(imdb_id) && movie == null)
+                    movie = await MOVIE_ID($"{init.host}/balancer-api/iframe?imdb={imdb_id}&token={init.token}");
+
+                return movie;
+            });
         }
         #endregion
     }

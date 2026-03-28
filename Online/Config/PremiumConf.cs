@@ -5,25 +5,15 @@ namespace Online.Config
     public class PremiumConf
     {
         /// <summary>
-        /// https://iptv.online/ru/dealers/api
+        /// api.vokino.org
+        /// api.vokino.pro
         /// </summary>
-        public OnlinesSettings IptvOnline { get; set; } = new OnlinesSettings("IptvOnline", "https://iptv.online", enable: false)
+        public VokinoSettings VoKino { get; set; } = new VokinoSettings("VoKino", "http://api.vokino.org")
         {
+            displayindex = 300,
+            streamproxy = false,
+            rchstreamproxy = "web",
             rhub_safety = false
-        };
-
-
-        public AllohaSettings Alloha { get; set; } = new AllohaSettings("Alloha", "https://api.apbugall.org", "https://torso-as.stloadi.live", "", "", true, true)
-        {
-            rch_access = "apk,cors,web",
-            stream_access = "apk,cors,web",
-            reserve = true
-        };
-
-
-        public FilmixSettings FilmixPartner { get; set; } = new FilmixSettings("FilmixPartner", "http://5.61.56.18/partner_api", enable: false)
-        {
-            stream_access = "apk,cors,web"
         };
 
         /// <summary>
@@ -33,6 +23,7 @@ namespace Online.Config
         /// </summary>
         public FilmixSettings Filmix { get; set; } = new FilmixSettings("Filmix", "http://filmixapp.cyou")
         {
+            displayindex = 305,
             rhub_safety = false,
             rch_access = "apk",
             stream_access = "apk,cors,web",
@@ -42,8 +33,10 @@ namespace Online.Config
             ).ToDictionary()
         };
 
-        public FilmixSettings FilmixTV { get; set; } = new FilmixSettings("FilmixTV", "https://api.filmix.tv", enable: false)
+        public FilmixSettings FilmixTV { get; set; } = new FilmixSettings("FilmixTV", "https://api.filmix.tv")
         {
+            enable = false,
+            displayindex = 310,
             httpversion = 2,
             rhub_safety = false,
             pro = true,
@@ -53,9 +46,15 @@ namespace Online.Config
             ).ToDictionary()
         };
 
+        public FilmixSettings FilmixPartner { get; set; } = new FilmixSettings("FilmixPartner", "http://5.61.56.18/partner_api")
+        {
+            enable = false,
+            displayindex = 315,
+            stream_access = "apk,cors,web"
+        };
 
         /// <summary>
-        /// https://api.srvkp.com - стандартный 
+        /// https://api.srvkp.com - стандартный
         /// https://cdn32.lol/api- apk
         /// https://cdn4t.store/api - apk
         /// https://kpapp.link/api - smart tv
@@ -63,6 +62,7 @@ namespace Online.Config
         /// </summary>
         public KinoPubSettings KinoPub { get; set; } = new KinoPubSettings("KinoPub", "https://api.srvkp.com")
         {
+            displayindex = 320,
             httpversion = 2,
             rhub_safety = false,
             filetype = "hls", // hls | hls4 | mp4
@@ -76,43 +76,52 @@ namespace Online.Config
             ).ToDictionary()
         };
 
+        public AllohaSettings Alloha { get; set; } = new AllohaSettings("Alloha", "https://apbugall.org/v2", "https://torso-as.stloadi.live", "", "", true, true)
+        {
+            displayindex = 325,
+            httpversion = 2,
+            rch_access = "apk,cors,web",
+            stream_access = "apk,cors,web",
+            reserve = true
+        };
 
         public RezkaSettings RezkaPrem { get; set; } = new RezkaSettings("RezkaPrem", null)
         {
             enable = false,
             rhub_safety = false,
+            displayindex = 330,
             stream_access = "apk,cors,web",
             reserve = true,
             hls = true,
             scheme = "http"
         };
 
-
-        /// <summary>
-        /// api.vokino.org
-        /// api.vokino.pro
-        /// </summary>
-        public VokinoSettings VoKino { get; set; } = new VokinoSettings("VoKino", "http://api.vokino.org", streamproxy: false)
-        {
-            rchstreamproxy = "web",
-            rhub_safety = false
-        };
-
-
-        public OnlinesSettings iRemux { get; set; } = new OnlinesSettings("iRemux", "https://megaoblako.com")
-        {
-            rchstreamproxy = "web",
-            geostreamproxy = ["UA"]
-        };
-
         public OnlinesSettings GetsTV { get; set; } = new OnlinesSettings("GetsTV", "https://getstv.com")
         {
             enable = false,
+            displayindex = 335,
             stream_access = "apk,cors,web",
             rhub_safety = false,
             headers = HeadersModel.Init(
                 ("user-agent", "Mozilla/5.0 (Web0S; Linux/SmartTV) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/53.0.2785.34 Safari/537.36 WebAppManager")
             ).ToDictionary()
+        };
+
+        public OnlinesSettings iRemux { get; set; } = new OnlinesSettings("iRemux", "https://megaoblako.com")
+        {
+            enable = false,
+            displayindex = 340,
+            rchstreamproxy = "web",
+            geostreamproxy = ["UA"]
+        };
+
+        /// <summary>
+        /// https://iptv.online/ru/dealers/api
+        /// </summary>
+        public OnlinesSettings IptvOnline { get; set; } = new OnlinesSettings("IptvOnline", "https://iptv.online", enable: false)
+        {
+            displayindex = 345,
+            rhub_safety = false
         };
     }
 }

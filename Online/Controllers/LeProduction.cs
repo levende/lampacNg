@@ -1,4 +1,5 @@
 ﻿using Microsoft.AspNetCore.Mvc;
+using Shared.Attributes;
 using Shared.Services.RxEnumerate;
 
 namespace Online.Controllers
@@ -8,6 +9,7 @@ namespace Online.Controllers
         public LeProduction() : base(ModInit.siteConf.LeProduction) { }
 
         [HttpGet]
+        [Staticache]
         [Route("lite/leproduction")]
         async public Task<ActionResult> Index(string title, string original_title, int clarification, int serial = 0, string href = null)
         {
@@ -17,15 +19,16 @@ namespace Online.Controllers
             if (await IsRequestBlocked(rch: true))
                 return badInitMsg;
 
-            string searchTitle = clarification == 1 ? title : (original_title ?? title);
-            if (string.IsNullOrWhiteSpace(searchTitle))
-                return OnError();
-
             rhubFallback:
 
+            #region search
             if (string.IsNullOrEmpty(href))
             {
-                var search = await InvokeCacheResult<(string href, SimilarTpl similar)>($"leproduction:search:{searchTitle}", 30, async e =>
+                string searchTitle = clarification == 1 ? title : (original_title ?? title);
+                if (string.IsNullOrWhiteSpace(searchTitle))
+                    return OnError();
+
+                var search = await InvokeCacheResult<(string href, SimilarTpl similar)>($"leproduction:search:{searchTitle}", TimeSpan.FromHours(4), async e =>
                 {
                     string newsHref = null;
                     var similar = new SimilarTpl();
@@ -35,12 +38,14 @@ namespace Online.Controllers
                     {
                         string stitle = StringConvert.SearchName(title);
                         string soriginal = StringConvert.SearchName(original_title);
-                        string searchHtml = html.ToString();
 
-                        foreach (Match m in Regex.Matches(searchHtml, "<a\\s+href=\"https?://[^/]+/(film/[0-9]+-[^\"]+\\.html)\"[^>]*>([^<]+)</a>", RegexOptions.IgnoreCase))
+                        var rx = Rx.Matches("<a\\s+href=\"https?://[^/]+/(film/[0-9]+-[^\"]+\\.html)\"[^>]*>([^<]+)</a>", html, options: RegexOptions.IgnoreCase);
+
+                        foreach (var row in rx.Rows())
                         {
-                            string itemHref = m.Groups[1].Value;
-                            string itemTitle = Regex.Replace(m.Groups[2].Value, "<[^>]*>", string.Empty).Trim();
+                            var g = row.Groups();
+                            string itemHref = g[1].Value;
+                            string itemTitle = Regex.Replace(g[2].Value, "<[^>]*>", string.Empty).Trim();
 
                             if (string.IsNullOrWhiteSpace(itemHref) || string.IsNullOrWhiteSpace(itemTitle))
                                 continue;
@@ -75,6 +80,7 @@ namespace Online.Controllers
 
                 href = search.Value.href;
             }
+            #endregion
 
             var cache = await InvokeCacheResult<string>($"leproduction:view:{href}", 20, async e =>
             {
@@ -91,7 +97,7 @@ namespace Online.Controllers
 
                 string fileBlock = null;
 
-                await httpHydra.GetSpan(iframe, addheaders: HeadersModel.Init("referer", href), spanAction: html =>
+                await httpHydra.GetSpan(iframe, addheaders: HeadersModel.Init("referer", $"{init.host}/{href}"), spanAction: html =>
                 {
                     fileBlock = Rx.Match(html, "file\\s*:\\s*(\\[[\\s\\S]*?\\])\\s*,\\s*embed\\s*:");
                 });

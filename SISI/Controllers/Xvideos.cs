@@ -1,5 +1,5 @@
 using Microsoft.AspNetCore.Mvc;
-using Newtonsoft.Json.Linq;
+using SISI.Models.Xvideos;
 using Shared.Attributes;
 using System.Net.Http;
 
@@ -19,7 +19,7 @@ namespace SISI.Controllers
         }
 
         [HttpGet]
-        [Staticache(11)]
+        [Staticache]
         [Route("xds")]
         [Route("xdsgay")]
         [Route("xdssml")]
@@ -30,8 +30,8 @@ namespace SISI.Controllers
 
             string plugin = Regex.Match(HttpContext.Request.Path.Value, "^/([a-z]+)").Groups[1].Value;
 
-        rhubFallback:
-            var cache = await InvokeCacheResult(ipkey($"{plugin}:list:{search}:{sort}:{c}:{pg}"), 10, jsonContext.ListPlaylistItem, async e =>
+            rhubFallback:
+            var cache = await InvokeCacheResult($"{plugin}:list:{search}:{sort}:{c}:{pg}", 10, jsonContext.ListPlaylistItem, async e =>
             {
                 List<PlaylistItem> playlists = null;
 
@@ -59,7 +59,7 @@ namespace SISI.Controllers
 
 
         [HttpGet]
-        [Staticache(11)]
+        [Staticache]
         [Route("xds/stars")]
         [Route("xdsgay/stars")]
         [Route("xdssml/stars")]
@@ -73,11 +73,11 @@ namespace SISI.Controllers
 
             string plugin = Regex.Match(HttpContext.Request.Path.Value, "^/([a-z]+)").Groups[1].Value;
 
-        rhubFallback:
-            var cache = await InvokeCacheResult(ipkey($"{plugin}:stars:{uri}:{sort}:{pg}"), 10, jsonContext.ListPlaylistItem, async e =>
+            rhubFallback:
+            var cache = await InvokeCacheResult($"{plugin}:stars:{uri}:{sort}:{pg}", 10, jsonContext.ListPlaylistItem, async e =>
             {
                 var playlists = await XvideosTo.Pornstars("xds/vidosik", $"{plugin}/stars", init.host, plugin, uri, sort, pg,
-                    url => httpHydra.Get<JObject>(url)
+                    url => httpHydra.Get<PornstarsRoot>(url)
                 );
 
                 if (playlists == null || playlists.Count == 0)
@@ -90,12 +90,12 @@ namespace SISI.Controllers
                 goto rhubFallback;
 
             return PlaylistResult(cache
-            // XvideosTo.PornstarsMenu(host, plugin, sort)
+                // XvideosTo.PornstarsMenu(host, plugin, sort)
             );
         }
 
         [HttpGet]
-        [Staticache(1)]
+        [Staticache]
         [Route("xds/vidosik")]
         async public Task<ActionResult> Index(string uri, bool related)
         {

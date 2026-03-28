@@ -1,5 +1,4 @@
 ﻿using Microsoft.AspNetCore.Mvc;
-using Newtonsoft.Json.Linq;
 using Online.Models.HDVB;
 using Shared.Attributes;
 using Shared.Services.RxEnumerate;
@@ -11,7 +10,7 @@ namespace Online.Controllers
         public HDVB() : base(ModInit.siteConf.HDVB) { }
 
         [HttpGet]
-        [Staticache(1)]
+        [Staticache]
         [Route("lite/hdvb")]
         async public Task<ActionResult> Index(long kinopoisk_id, string title, string original_title, int t = -1, int s = -1, bool rjson = false, bool similar = false)
         {
@@ -24,10 +23,10 @@ namespace Online.Controllers
             reset:
 
             #region search
-            JArray data = await search(kinopoisk_id);
+            List<Video> data = await search(kinopoisk_id);
             if (data == null || data.Count == 0)
             {
-                if (init.rhub && init.rhub_fallback)
+                if(init.rhub && init.rhub_fallback)
                 {
                     init.rhub = false;
                     goto reset;
@@ -37,17 +36,17 @@ namespace Online.Controllers
             }
             #endregion
 
-            if (data.First.Value<string>("type") == "movie")
+            if (data.First().type == "movie")
             {
                 #region Фильм
                 var mtpl = new MovieTpl(title, original_title, data.Count);
 
                 foreach (var m in data)
                 {
-                    string iframe = fixframe(init.host, m.Value<string>("iframe_url"));
+                    string iframe = fixframe(init.host, m.iframe_url);
                     string link = $"{host}/lite/hdvb/video?kinopoisk_id={kinopoisk_id}&title={HttpUtility.UrlEncode(title)}&original_title={HttpUtility.UrlEncode(original_title)}&iframe={HttpUtility.UrlEncode(iframe)}";
 
-                    mtpl.Append(m.Value<string>("translator"), link, "call", accsArgs($"{link.Replace("/video", "/video.m3u8")}&play=true"));
+                    mtpl.Append(m.translator, link, "call", accsArgs($"{link.Replace("/video", "/video.m3u8")}&play=true"));
                 }
 
                 return ContentTpl(mtpl);
@@ -63,16 +62,19 @@ namespace Online.Controllers
 
                     foreach (var voice in data)
                     {
-                        foreach (var season in voice.Value<JArray>("serial_episodes"))
+                        foreach (var season in voice.serial_episodes ?? new List<Season>())
                         {
-                            string season_name = $"{season.Value<int>("season_number")} сезон";
+                            if (!season.season_number.HasValue)
+                                continue;
+
+                            string season_name = $"{season.season_number.Value} сезон";
                             if (tmp_season.Contains(season_name))
                                 continue;
 
                             tmp_season.Add(season_name);
 
-                            string link = $"{host}/lite/hdvb?rjson={rjson}&serial=1&kinopoisk_id={kinopoisk_id}&title={HttpUtility.UrlEncode(title)}&original_title={HttpUtility.UrlEncode(original_title)}&s={season.Value<int>("season_number")}";
-                            tpl.Append(season_name, link, season.Value<int>("season_number"));
+                            string link = $"{host}/lite/hdvb?rjson={rjson}&serial=1&kinopoisk_id={kinopoisk_id}&title={HttpUtility.UrlEncode(title)}&original_title={HttpUtility.UrlEncode(original_title)}&s={season.season_number.Value}";
+                            tpl.Append(season_name, link, season.season_number.Value);
                         }
                     }
 
@@ -85,22 +87,22 @@ namespace Online.Controllers
 
                     for (int i = 0; i < data.Count; i++)
                     {
-                        if (data[i].Value<JArray>("serial_episodes")?.FirstOrDefault(i => i.Value<int>("season_number") == s) == null)
+                        if (data[i].serial_episodes?.FirstOrDefault(i => i.season_number == s) == null)
                             continue;
 
                         if (t == -1)
                             t = i;
 
                         string link = $"{host}/lite/hdvb?rjson={rjson}&serial=1&kinopoisk_id={kinopoisk_id}&title={HttpUtility.UrlEncode(title)}&original_title={HttpUtility.UrlEncode(original_title)}&s={s}&t={i}";
-                        vtpl.Append(data[i].Value<string>("translator"), t == i, link);
+                        vtpl.Append(data[i].translator, t == i, link);
                     }
                     #endregion
 
                     var etpl = new EpisodeTpl(vtpl);
-                    string iframe = HttpUtility.UrlEncode(fixframe(init.host, data[t].Value<string>("iframe_url")));
-                    string translator = HttpUtility.UrlEncode(data[t].Value<string>("translator"));
+                    string iframe = HttpUtility.UrlEncode(fixframe(init.host, data[t].iframe_url));
+                    string translator = HttpUtility.UrlEncode(data[t].translator);
 
-                    foreach (int episode in data[t].Value<JArray>("serial_episodes").FirstOrDefault(i => i.Value<int>("season_number") == s).Value<JArray>("episodes").ToObject<List<int>>())
+                    foreach (int episode in data[t].serial_episodes.FirstOrDefault(i => i.season_number == s).episodes ?? new List<int>())
                     {
                         string link = $"{host}/lite/hdvb/serial?title={HttpUtility.UrlEncode(title)}&original_title={HttpUtility.UrlEncode(original_title)}&iframe={iframe}&t={translator}&s={s}&e={episode}";
                         string streamlink = accsArgs($"{link.Replace("/serial", "/serial.m3u8")}&play=true");
@@ -150,7 +152,7 @@ namespace Online.Controllers
                     ("sec-fetch-site", "cross-site")
                 );
 
-            reset:
+                reset:
 
                 string urim3u8 = null;
                 string vid = "vid11", href = null, csrftoken = null, file = null;
@@ -264,7 +266,7 @@ namespace Online.Controllers
                         ("sec-fetch-site", "cross-site")
                     );
 
-                reset_playlist:
+                    reset_playlist:
 
                     string href = null, csrftoken = null, file = null;
 
@@ -378,7 +380,7 @@ namespace Online.Controllers
         #region SpiderSearch
         [HttpGet]
         [Route("lite/hdvb-search")]
-        async public Task<ActionResult> RouteSpiderSearch(string title, bool rjson = false)
+        async public Task<ActionResult> RouteSpiderSearch(string title,bool rjson = false)
         {
             if (string.IsNullOrWhiteSpace(title))
                 return OnError();
@@ -387,10 +389,10 @@ namespace Online.Controllers
                 return badInitMsg;
 
             rhubFallback:
-            var cache = await InvokeCacheResult<JArray>($"hdvb:search:{title}", 40, async e =>
+            var cache = await InvokeCacheResult<List<Video>>($"hdvb:search:{title}", TimeSpan.FromHours(4), async e =>
             {
                 var newheaders = HeadersModel.Init(Http.defaultFullHeaders);
-                var root = await httpHydra.Get<JArray>($"{init.cors(init.apihost)}/api/videos.json?token={init.token}&title={HttpUtility.UrlEncode(title)}", safety: true, newheaders: newheaders);
+                var root = await httpHydra.Get<List<Video>>($"{init.cors(init.apihost)}/api/videos.json?token={init.token}&title={HttpUtility.UrlEncode(title)}", safety: true, newheaders: newheaders);
 
                 if (root == null || root.Count == 0)
                     return e.Fail("results");
@@ -408,12 +410,12 @@ namespace Online.Controllers
 
                 foreach (var j in cache.Value)
                 {
-                    var kinopoisk_id = j.Value<long?>("kinopoisk_id");
+                    var kinopoisk_id = j.kinopoisk_id;
                     if (kinopoisk_id > 0 && !hash.Contains((long)kinopoisk_id))
                     {
                         hash.Add((long)kinopoisk_id);
                         string uri = $"{host}/lite/hdvb?kinopoisk_id={kinopoisk_id}";
-                        stpl.Append(j.Value<string>("title_ru") ?? j.Value<string>("title_en"), j.Value<int>("year").ToString(), string.Empty, uri, PosterApi.Size(j.Value<string>("poster")));
+                        stpl.Append(j.title_ru ?? j.title_en, (j.year ?? 0).ToString(), string.Empty, uri, PosterApi.Size(j.poster));
                     }
                 }
 
@@ -424,14 +426,14 @@ namespace Online.Controllers
 
 
         #region search
-        async ValueTask<JArray> search(long kinopoisk_id)
+        async ValueTask<List<Video>> search(long kinopoisk_id)
         {
             string memKey = $"hdvb:view:{kinopoisk_id}";
 
-            if (!hybridCache.TryGetValue(memKey, out JArray root))
+            if (!hybridCache.TryGetValue(memKey, out List<Video> root))
             {
                 var newheaders = HeadersModel.Init(Http.defaultFullHeaders);
-                root = await httpHydra.Get<JArray>($"{init.cors(init.apihost)}/api/videos.json?token={init.token}&id_kp={kinopoisk_id}", safety: true, newheaders: newheaders);
+                root = await httpHydra.Get<List<Video>>($"{init.cors(init.apihost)}/api/videos.json?token={init.token}&id_kp={kinopoisk_id}", safety: true, newheaders: newheaders);
 
                 if (root == null)
                 {
@@ -441,7 +443,7 @@ namespace Online.Controllers
 
                 proxyManager?.Success();
 
-                hybridCache.Set(memKey, root, cacheTime(40), inmemory: false);
+                hybridCache.Set(memKey, root, TimeSpan.FromHours(4), inmemory: false);
             }
 
             if (root.Count == 0)

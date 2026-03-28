@@ -23,7 +23,7 @@ namespace Online.Controllers
 
 
         [HttpGet]
-        [Staticache(1)]
+        [Staticache]
         [Route("lite/flixcdn")]
         async public Task<ActionResult> Index(string imdb_id, long kinopoisk_id, string title, string original_title, int year, int t = -1, int s = -1, bool similar = false)
         {
@@ -34,7 +34,7 @@ namespace Online.Controllers
                 return OnError();
 
             rhubFallback:
-            var cache = await InvokeCacheResult<SearchItem>($"flixcdn:search:{imdb_id}:{kinopoisk_id}:{title}:{similar}", 20, async e =>
+            var cache = await InvokeCacheResult<SearchItem>($"flixcdn:search:{imdb_id}:{kinopoisk_id}:{title}:{similar}", TimeSpan.FromHours(4), async e =>
             {
                 if (similar || (kinopoisk_id == 0 && string.IsNullOrEmpty(imdb_id)))
                 {
@@ -169,7 +169,7 @@ namespace Online.Controllers
                     return ShowError(rch_error);
             }
 
-        rhubFallback:
+            rhubFallback:
             var cache = await InvokeCacheResult<string>(ipkey($"flixcdn:stream:{iframe}:{t}:{s}:{e}"), 10, async result =>
             {
                 string file = null;
