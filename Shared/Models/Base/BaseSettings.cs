@@ -26,7 +26,6 @@ namespace Shared.Models.Base
 
         public bool spider { get; set; } = true;
 
-
         public bool kit { get; set; } = true;
 
         public bool IsKitConf { get; set; }
@@ -94,6 +93,8 @@ namespace Shared.Models.Base
         public int cache_time { get; set; }
 
         public string displayname { get; set; }
+
+        public bool ignore_extra_title { get; set; }
 
         public int displayindex { get; set; }
 

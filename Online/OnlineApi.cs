@@ -672,6 +672,7 @@ namespace Online
                     return;
 
                 string displayname = init.displayname ?? name ?? init.plugin;
+                string extraTitle = init.ignore_extra_title ? string.Empty : arg_title;
 
                 if (string.IsNullOrEmpty(url))
                 {
@@ -687,7 +688,7 @@ namespace Online
                         url += (url.Contains("?") ? "&" : "?") + "clarification=1";
                 }
 
-                online.Add(($"{displayname}{arg_title}", url, (plugin ?? init.plugin ?? name).ToLower(), init.displayindex > 0 ? init.displayindex : online.Count));
+                online.Add(($"{displayname}{extraTitle}", url, (plugin ?? init.plugin ?? name).ToLower(), init.displayindex > 0 ? init.displayindex : online.Count));
             }
             #endregion
 
